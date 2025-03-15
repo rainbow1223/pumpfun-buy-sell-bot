@@ -14,19 +14,23 @@ const Order = require("./models/order");
 const { runOrder } = require("./core/limitOrder.js");
 const { getUserData } = require("./globals/global.js");
 const { buyPumpToken } = require("./core/pumpSwap.js");
+const { PumpFunService } = require("./pumpfun/pumpfun.js")
+const { AnchorProvider } = require("@coral-xyz/anchor");
+const NodeWallet = require("@coral-xyz/anchor/dist/cjs/nodewallet");
+const { connection } = require('./core/constants.js')
+const { Keypair, PublicKey } = require("@solana/web3.js")
+const base58 = require("bs58");
+
 require('./config/db.js');
 
 require("dotenv").config();
 
+
 const apiId = parseInt(process.env.TG_API_ID);
 const apiHash = process.env.TG_API_HASH;
 const stringSession = new StringSession(process.env.TG_SESSION);
-const tgChannelURL = process.env.TG_CHANNEL;
+const tgChannelURL = process.env.TG_TEST_CHANNEL;
 
-const BOT_CHAT_ID = 7759691597;
-const CLIENT_CHAT_ID = 1735927082;
-
-const tgTopicId = process.env.TG_TOPIC_ID;
 
 let client = null;
 let isListening = false;
@@ -116,17 +120,11 @@ const startChannelListener = async (chatId) => {
     });
 
     console.log("TG Connected...");
-    // console.log(client.session.save());
+   
     console.log("url", tgChannelURL)
     const channelToListen = await client.getEntity(tgChannelURL);
     console.log("Channel to listen:", tgChannelURL);
-    // const messages = await client.getMessages(channelToListen, {
-    //   limit: 1, // Adjust this number based on how many messages you want to retrieve
-    //   topicId: 1120024, // The ID of the topic you want to fetch
-    //   // reverse: true // To get the newest messages first
-    // });
-    // console.log(messages[0].peerId.channelId);
-
+   
 
     client.addEventHandler(
       
@@ -145,11 +143,6 @@ const startChannelListener = async (chatId) => {
           const tokenAddress = solanaAddressMatch[0];
           console.log("Found Solana address:", tokenAddress);
           bot.sendMessage(chatId, `DexPaid Solana Token Found: ${tokenAddress}`);
-          // Process token for all active users
-          // const activeUsers = await User.find({ status: true });
-          // for (const user of activeUsers) {
-            
-          // }
           try {
             processToken(tokenAddress, chatId);
           } catch (error) {
@@ -195,45 +188,46 @@ async function processToken(tokenAddress, chatId) {
       bot.sendMessage(chatId, "Token already in portfolio");
       return;
     }
-
-    // Get pool address and buy token
-    // const poolAddress = await getPoolAddress(tokenAddress);
+    bot.sendMessage(chatId, `tokenaddress is ${tokenAddress}`);
     
-    const raydiumPools = await getRaydiumPoolAddressWithDexAPI(tokenAddress);
-    while (raydiumPools.length === 0) {
-      console.log("No pools found for this token, retrying in 2 seconds...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      raydiumPools = await getRaydiumPoolAddressWithDexAPI(tokenAddress);
+    console.log("trading User Privatekey", tradingUser.tradeWalletPrivateKey);
+    if (!tradingUser.tradeWalletPrivateKey) {
+      bot.sendMessage(chatId, "Trade wallet private key is not defined");
+      return;
     }
-    const poolAddress = raydiumPools[0].poolAddress;
-    console.log("raydiumPools: ", raydiumPools);
-    // bot.sendMessage(chatId, `raydiumPools: ${JSON.stringify(raydiumPools)}`);
-    // let buyResult = {};
-    // buyResult.message = "Buy token is Successful"
-    bot.sendMessage(chatId, `tokenaddress is ${tokenAddress}, poolAddress is ${poolAddress}`)
-    const buyResult = await buyPumpToken(tradingUser.tradingAmount, tokenAddress, tradingUser.tradeWalletPrivateKey, chatId)
 
-    bot.sendMessage(chatId, buyResult.message);
-    // Check if buy was successful
-    if (buyResult.message === "Buy token is Successful") {
-      console.log("GLOBAL SOL PRICE is : ", global.currentSolPrice)
-      let buyTokenPrice = await getTokenPrice(tokenAddress, poolAddress, global.currentSolPrice);
-      
-      // Create new order
-      const newOrder = new Order({
-        chatId: tradingUser.chatId,
-        tokenAddress: tokenAddress,
-        poolAddress: poolAddress,
-        privateKey: tradingUser.tradeWalletPrivateKey,
-        tokenPrice: buyTokenPrice,
-        previousPrice: buyTokenPrice,
-        status: "pending",
-        isPumpToken: false
-      });
+    const keypair = Keypair.fromSecretKey(base58.decode(tradingUser.tradeWalletPrivateKey));
 
-      await newOrder.save();
-      bot.sendMessage(chatId, `Successfully bought token: ${tokenAddress}\nTransaction: ${buyResult.signature}`);
-    }
+    // Set up provider
+    const provider = new AnchorProvider(connection, { publicKey: keypair.publicKey, signAllTransactions: txs => txs }, {
+        commitment: "finalized",
+    });
+    
+    console.log("Provider is", provider);
+    
+    const pumpFunService = new PumpFunService(provider);
+
+    // const buyer = await getKeyPairFromPrivateKey(tradeUser.walletPrivateKey);
+    // const amount = tradingUser.tradingAmount;
+    const amount = 0.001;
+    const LAMPORTS_PER_SOL = 1000000000;
+    const SLIPPAGE_BASIS_POINTS = BigInt(500);
+    // const result = await buyPumpToken(0.001, tokenAddress, tradingUser.tradeWalletPrivateKey, chatId);
+    const results = await pumpFunService.buy(
+      keypair,
+      new PublicKey(tokenAddress),
+      BigInt(amount * LAMPORTS_PER_SOL),
+      SLIPPAGE_BASIS_POINTS,
+      {
+        unitLimit: 250000,
+        unitPrice: 250000,
+      }
+    );
+    console.log(results);
+    bot.sendMessage(chatId, `Token bought successfully: ${results}`);
+
+
+
   } catch (error) {
     console.error("Error processing token:", error);
     bot.sendMessage(chatId, `Error buying token: ${error.message}`);
@@ -464,7 +458,7 @@ bot.on("message", async (msg) => {
 
 // Start the bot
 
-setInterval(runOrder, 5000);
+// setInterval(runOrder, 5000);
 
 console.log("Bot initialized and ready to receive commands...");
 

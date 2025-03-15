@@ -114,6 +114,7 @@ const {
         commitment
       );
   
+      
       let buyResults = await sendTx(
         this.connection,
         buyTx,
@@ -123,6 +124,21 @@ const {
         commitment,
         finality
       );
+      if (buyResults.success) {
+        let bondingCurveAccount = await this.getBondingCurveAccount(
+          mint,
+          commitment
+        );
+        if (bondingCurveAccount) {
+          // let globalAccount = await this.getGlobalAccount(commitment);
+          let buyAmount = bondingCurveAccount.getBuyPrice(buyAmountSol);
+          buyResults.results.buyAmount = buyAmount;
+          buyResults.results.virtualTokenReserves = bondingCurveAccount.virtualTokenReserves;
+          buyResults.results.virtualSolReserves = bondingCurveAccount.virtualSolReserves;
+          buyResults.results.realTokenReserves = bondingCurveAccount.realTokenReserves;
+          buyResults.results.realSolReserves = bondingCurveAccount.realSolReserves;
+        }
+      }
       return buyResults;
     }
   
