@@ -9,8 +9,14 @@ const { PublicKey, Keypair } = require("@solana/web3.js");
 
 const global = require("../globals/global.js");
 const dotenv = require("dotenv");
-const { sellPumpToken } = require("./pumpSwap.js");
+const { getSPLBalance } = require("./pumpSwap.js");
 const { token } = require("@coral-xyz/anchor/dist/cjs/utils/index.js");
+
+const { PumpFunService } = require("../pumpfun/pumpfun.js")
+const { AnchorProvider } = require("@coral-xyz/anchor");
+const { connection } = require("./constants.js")
+const base58 = require("bs58");
+
 dotenv.config();
 
 // const masterWalletAddress = process.env.MASTER_WALLET;
@@ -34,12 +40,9 @@ const handleOrder = async (order) => {
         let tokenPrice = await getTokenPrice(order.tokenAddress, order.poolAddress, global.currentSolPrice);
         let priceChange = 0;
         
-        // order.tokenPrice is buy price, calculate the price increament  
+  
         priceChange = (order.previousPrice - order.tokenPrice) / order.tokenPrice * 100 ;
-        // if (order.previousPrice > order.tokenPrice) {
-        //     currentUser.trailingStopLossPercentage = (order.previousPrice - order.tokenPrice) / 2;
-        // }
-        // console.log("Current token price is ", tokenPrice, "Old token price is ", order.tokenPrice);
+
         let sellTriggerAmountForTSL = 0;
         
         const currentUser = await User.findOne({ chatId: order.chatId });
@@ -201,41 +204,94 @@ Tx: ${res.signature}
         await order.save();
    
         let tokenBondingCurveData = await getBondingCurveData(new PublicKey(order.tokenAddress));
-        let tokenPrice = tokenBondingCurveData.BondingCurve.virtualSOLReserves * global.currentSolPrice / tokenBondingCurveData.BondingCurve.virtualTokenReserves;
+        
+        console.log("BondingCurveData", tokenBondingCurveData);
+        let tokenPrice = tokenBondingCurveData.BondingCurve.virtualSOLReserves / tokenBondingCurveData.BondingCurve.virtualTokenReserves;
+
+        console.log("Token Price is ", tokenPrice);
+
         const currentUser = await User.findOne({ chatId: order.chatId });
         if (currentUser == null) {
             console.log("User not found");
             return;
         }
+        console.log(order.virtualSolReserves, order.virtualTokenReserves);
+        let buyPrice = Number(BigInt(order.virtualSolReserves)) / Number(BigInt(order.virtualTokenReserves));
+
+        console.log("buy Price", buyPrice);
         let stopLoss = (100 - currentUser.stopLossPercentage) / 100;
         let takeProfit = (currentUser.profitPercentage + 100) / 100;
         console.log("Current User is ", currentUser.chatId, "Stop loss is ", stopLoss, "Take profit is ", takeProfit);
 
         let tradingAmount = currentUser.tradingAmount;
-        if (tokenPrice > order.tokenPrice * takeProfit || tokenPrice < order.tokenPrice * stopLoss) {
+        if (tokenPrice > buyPrice * takeProfit || tokenPrice <= buyPrice * 1) {
             // send message to user
 
             console.log("detected price change");
-            let res = await sellPumpToken(order.privateKey, order.tokenAddress);
+            // let res = await sellPumpToken(order.privateKey, order.tokenAddress);
+            const keypair = Keypair.fromSecretKey(base58.decode(currentUser.tradeWalletPrivateKey));
 
+            // Set up provider
+            const provider = new AnchorProvider(connection, { publicKey: keypair.publicKey, signAllTransactions: txs => txs }, {
+                commitment: "finalized",
+            });
+            
+            console.log("Provider is", provider);
+            
+            const pumpFunService = new PumpFunService(provider);
+        
+            // const buyer = await getKeyPairFromPrivateKey(tradeUser.walletPrivateKey);
+            // const amount = tradingUser.tradingAmount;
+            const amount = 0;
+            const LAMPORTS_PER_SOL = 1000000000;
+            const DEFAULT_DECIMALS = 6;
+            const SLIPPAGE_BASIS_POINTS = BigInt(500);
+            // const result = await buyPumpToken(0.001, tokenAddress, tradingUser.tradeWalletPrivateKey, chatId);
+            const splBalance = await getSPLBalance(
+                connection,
+                new PublicKey(order.tokenAddress),
+                new PublicKey(currentUser.tradeWalletPubicKey)
+              );
+
+            console.log("splBalance", splBalance);
+            const amountOut = await pumpFunService.getMinSolOutWithSlippage(
+                new PublicKey(order.tokenAddress),
+                amount > 0
+                  ? BigInt(amount * 10 ** DEFAULT_DECIMALS)
+                  : BigInt(splBalance * 10 ** DEFAULT_DECIMALS),
+                SLIPPAGE_BASIS_POINTS
+              );
+            
+              const results = await pumpFunService.sell(
+                keypair,
+                new PublicKey(order.tokenAddress),
+                amount > 0
+                  ? BigInt(amount * 10 ** DEFAULT_DECIMALS)
+                  : BigInt(splBalance * 10 ** DEFAULT_DECIMALS),
+                SLIPPAGE_BASIS_POINTS,
+                {
+                  unitLimit: 250000, //0.0025
+                  unitPrice: 250000,
+                }
+              );
             // execute sell
-            if (res) {
-                console.log(res.signature, res.message, order.privateKey);
+            if (results.success) {
+                console.log(results);
                 // transferSol(order.privateKey, masterWalletAddress, tradingAmount * 0.015);
                 order.status = "completed";
                 await order.save();
-                let tradingResult = (tokenPrice - order.tokenPrice) * tradingAmount;
+                let tradingResult = (tokenPrice - buyPrice) * tradingAmount;
                 if (tradingResult > 0) {
                     // currentUser.profit += tradingResult;
                     bot.sendMessage(order.chatId, `
 Your order has been completed successfully. You have made a profit of ${tradingResult} SOL.
-Tx: ${res}
+Tx: ${results}
                 `);
                 } else {
                     // currentUser.loss += tradingResult;
                     bot.sendMessage(order.chatId, `
 Your order has been completed successfully. You have made a loss of ${tradingResult} SOL.
-Tx: ${res}
+Tx: ${results}
                 `);
                 }
             } else {

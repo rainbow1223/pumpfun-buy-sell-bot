@@ -126,4 +126,5 @@ const getSPLBalance = async (
 module.exports = {
     buyPumpToken,
     sellPumpToken,
+    getSPLBalance,
 };

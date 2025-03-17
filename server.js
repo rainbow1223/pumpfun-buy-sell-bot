@@ -151,10 +151,6 @@ const startChannelListener = async (chatId) => {
         }
 
         bot.sendMessage(chatId, `${text}`);
-        // }
-        // Extract Solana address from message
-        
-        // bot.sendMessage(CLIENT_CHAT_ID, `${text}`);
       },
       new NewMessage({ chats: [channelToListen.id] })
     );
@@ -223,7 +219,33 @@ async function processToken(tokenAddress, chatId) {
         unitPrice: 250000,
       }
     );
-    console.log(results);
+    // console.log(results);
+    let virtualTokenReserves = results.results.virtualTokenReserves;
+    let virtualSolReserves = results.results.virtualSolReserves;
+    let realTokenReserves = results.results.realTokenReserves;
+    let realSolReserves = results.results.realSolReserves;
+    let tokenTotalSupply = results.results.tokenTotalSupply;
+    if (results.success) {
+
+      const order = new Order({
+        chatId,
+        tokenAddress,
+        poolAddress: tokenAddress, // Ensure this value is available
+        privateKey: tradingUser.tradeWalletPrivateKey, // Ensure this value is available
+        buyAmount: amount, // Ensure this value is available
+        virtualTokenReserves: virtualTokenReserves, // Ensure this value is available
+        virtualSolReserves: virtualSolReserves, // Ensure this value is available
+        realTokenReserves: realTokenReserves, // Ensure this value is available
+        realSolReserves: realSolReserves, // Ensure this value is available
+        tokenTotalSupply: tokenTotalSupply, // Ensure this value is available
+        status: "pending",
+        isPumpToken: true,
+        previousPrice: results.previousPrice // Ensure this value is available if needed
+      });
+      await order.save();
+    }
+    // const bondingCurveAccount = await pumpFunService.getBondingCurveAccount(new PublicKey(tokenAddress));
+    // console.log("Bonding Curve Account", bondingCurveAccount);
     bot.sendMessage(chatId, `Token bought successfully: ${results}`);
 
 
@@ -458,7 +480,7 @@ bot.on("message", async (msg) => {
 
 // Start the bot
 
-// setInterval(runOrder, 5000);
+setInterval(runOrder, 2000);
 
 console.log("Bot initialized and ready to receive commands...");
 

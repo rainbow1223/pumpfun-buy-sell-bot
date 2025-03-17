@@ -18,30 +18,20 @@ const orderSchema = new Schema({
         type: String,
         required: true
     },
-
-    buyAmount: {
-        type: Number,
-        required: true
-    },
     virtualTokenReserves: {
-        type: Number,
-        required: true
+        type: String,
     },
     virtualSolReserves: {
-        type: Number,
-        required: true
+        type: String,
+       
     },
     realTokenReserves: {
-        type: Number,
-        required: true
+        type: String,
+   
     },
     realSolReserves: {
-        type: Number,
-        required: true
-    },
-    tokenTotalSupply: {
-        type: Number,
-        required: true
+        type: String,   
+        
     },
     status: {
         type: String,
