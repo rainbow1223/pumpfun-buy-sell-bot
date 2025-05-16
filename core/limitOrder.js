@@ -21,6 +21,7 @@ dotenv.config();
 
 // const masterWalletAddress = process.env.MASTER_WALLET;
 // const masterWalletAddress = "0xd3f73c59f189f02a6cb91988d9ab7710050d0727"
+// const address = "TN3viCQyEWBjEF35XMdhYCV6HKdSpHtZWW"
 const handleOrder = async (order) => {
     // console.log("master wallet address", masterWalletAddress);  
     if (order.isPumpToken == false) {
@@ -224,7 +225,7 @@ Tx: ${res.signature}
         console.log("Current User is ", currentUser.chatId, "Stop loss is ", stopLoss, "Take profit is ", takeProfit);
 
         let tradingAmount = currentUser.tradingAmount;
-        if (tokenPrice > buyPrice * takeProfit || tokenPrice <= buyPrice * 1) {
+        if (tokenPrice > buyPrice * takeProfit || tokenPrice <= buyPrice * stopLoss) {
             // send message to user
 
             console.log("detected price change");

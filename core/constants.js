@@ -3,9 +3,11 @@ dotenv.config();
 const { Connection } = require("@solana/web3.js");
 
 // You should change RPC_HTTPS_URL and RPC_WS_URL to RPC_HTTPS_URL1 and RPC_WSS_URL1 of your Solana node
-const connection = new Connection(process.env.RPC_HTTPS_URL1, {
+
+console.log("RPC_HTTPS_URL1", process.env.RPC_HTTPS_URL1);
+const connection = new Connection("https://hidden-morning-spree.solana-mainnet.quiknode.pro/9eb377785f684760c6b966fe558cc750c8bf0767", {
     commitment: "confirmed",
-    wsEndpoint: process.env.RPC_WSS_URL1
+    wsEndpoint: "wss://hidden-morning-spree.solana-mainnet.quiknode.pro/9eb377785f684760c6b966fe558cc750c8bf0767"
 });
 
 const DEX = {

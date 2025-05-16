@@ -13,7 +13,7 @@ const User = require("./models/user.js");
 const Order = require("./models/order");
 const { runOrder } = require("./core/limitOrder.js");
 const { getUserData } = require("./globals/global.js");
-const { buyPumpToken } = require("./core/pumpSwap.js");
+const { buyPumpToken, buyTokenAtAmm, sellTokenAtAmm } = require("./core/pumpSwap.js");
 const { PumpFunService } = require("./pumpfun/pumpfun.js")
 const { AnchorProvider } = require("@coral-xyz/anchor");
 const NodeWallet = require("@coral-xyz/anchor/dist/cjs/nodewallet");
@@ -36,11 +36,11 @@ let client = null;
 let isListening = false;
 
 const getPoolAddress = async (contractAddress) => {
-  const url = `https://api.tokencheck.io/token/mint/${contractAddress}`;
+  // const url = `https://api.tokencheck.io/token/mint/${contractAddress}`;
   const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`;
 
   try {
-    const response = await axios.get(url); // Use axios to fetch dat
+    const response = await axios.get(dexUrl); // Use axios to fetch dat
     const data = response.data;
 
     // Extract the raydiumPool address from the response
@@ -55,7 +55,7 @@ const getPoolAddress = async (contractAddress) => {
   }
 };
 
-async function getRaydiumPoolAddressWithDexAPI(tokenAddress) {
+async function getPoolAddressWithDexAPI(tokenAddress) {
   try {
     const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
     const response = await axios.get(url);
@@ -98,6 +98,10 @@ const updateSolPrice = async () => {
   setTimeout(updateSolPrice, 100000000);
 };
 updateSolPrice();
+
+
+
+
 // Channel Listener Function
 const startChannelListener = async (chatId) => {
 
@@ -209,6 +213,18 @@ async function processToken(tokenAddress, chatId) {
     const LAMPORTS_PER_SOL = 1000000000;
     const SLIPPAGE_BASIS_POINTS = BigInt(500);
     // const result = await buyPumpToken(0.001, tokenAddress, tradingUser.tradeWalletPrivateKey, chatId);
+    const tokenAddress = "8LrdSu2tYaehRRZxD8SDbBskXFEeCNd6n11PAJgtpump";
+    // const result = await buyTokenAtAmm(tokenAddress, keypair, amount, 60, chatId);
+    const result = await sellTokenAtAmm(tokenAddress, keypair, 840, 60);
+
+    // console.log("Result", result);
+
+
+    if (!result) {
+      bot.sendMessage(chatId, "Error buying token");
+      return;
+    }
+    console.log("Result", result);
     const results = await pumpFunService.buy(
       keypair,
       new PublicKey(tokenAddress),
@@ -343,7 +359,21 @@ bot.on("callback_query", async (query) => {
       //   bot.sendMessage(chatId, "You don't have enough WSOL to start trading, please deposit some WSOL to start trading");
       //   return;
       // }
+      const amount = 0.001;
+      const keypair = Keypair.fromSecretKey(base58.decode(currentUser.tradeWalletPrivateKey));
+      const LAMPORTS_PER_SOL = 1000000000;
+      const SLIPPAGE_BASIS_POINTS = BigInt(500);
+      // const result = await buyPumpToken(0.001, tokenAddress, tradingUser.tradeWalletPrivateKey, chatId);
+      // const result = await buyTokenAtAmm(tokenAddress, keypair, amount, 60, chatId);
+      // if (!result) {
+      //   bot.sendMessage(chatId, "Error buying token");
+      //   return;
+      // }
+          const tokenAddress = "8LrdSu2tYaehRRZxD8SDbBskXFEeCNd6n11PAJgtpump";
+    // const result = await buyTokenAtAmm(tokenAddress, keypair, amount, 60, chatId);
+    const result = await sellTokenAtAmm(tokenAddress, keypair, 840, 60);
 
+    // c
       bot.sendMessage(chatId, `You have ${balance} SOL and ${wsolBalance} WSOL in your wallet, Trading started successfully`);
       // startMonitorDexPaidTokens(chatId);
       await startChannelListener(chatId);
@@ -480,7 +510,7 @@ bot.on("message", async (msg) => {
 
 // Start the bot
 
-setInterval(runOrder, 2000);
+// setInterval(runOrder, 2000);
 
 console.log("Bot initialized and ready to receive commands...");
 
